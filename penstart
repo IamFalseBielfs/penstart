@@ -1,0 +1,175 @@
+#!/bin/bash
+
+# // This is a program to automatically run pentesting scripts for you \\ #
+
+# // Variables \\ #
+USER=$(whoami)
+ip=$1 # Sets argument one to the ip address
+fs=$2 # Sets argument two, to the gobuster file selection
+DIRECTORY="$(pwd)/penstart" # Sets directory for outputting files to
+
+# // COLORS \\ #
+red='\033[1;31m'
+green='\033[1;32m'
+cyan='\033[1;36m'
+reset='\033[m'
+
+# // Validates Ip Addresses \\ #
+function valid_ip {
+
+    local  ip=$1
+    local  stat=1
+
+    if [[ $ip =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]]; then
+        OIFS=$IFS
+        IFS='.'
+        ip=($ip)
+        IFS=$OIFS
+        [[ ${ip[0]} -le 255 && ${ip[1]} -le 255 \
+            && ${ip[2]} -le 255 && ${ip[3]} -le 255 ]]
+        stat=$?
+    fi
+    return $stat
+}
+
+# // Tests if http is running on ip \\ #
+function http_test {
+	#cat $DIRECTORY/nmap_$ip.nmap | grep -q "80/tcp  open  http" && http_status="open" || http_status="false"
+	if [ ! -d "$DIRECTORY" ]; then
+		echo -e
+	else
+		if grep --quiet 80 "$DIRECTORY"/nmap_"$ip".txt; then
+			http_status="open"
+		else
+			http_status="closed"
+		fi
+		export http_status
+	fi
+}
+
+# // Nmap Function \\ #
+function nmap_func {
+
+	if [ ! -d "$DIRECTORY" ]
+	then
+		echo -e "${green}"
+		sudo mkdir "$DIRECTORY" && sudo nmap -sV -O -T5 -o "$DIRECTORY/nmap_$ip.txt" $ip
+		echo -e "${reset}"
+		http_test
+		nikto_func
+	else
+		echo -e ${green}
+		sudo nmap -sV -O -T5 -o "$DIRECTORY/nmap_$ip.txt" $ip
+		echo -e ${reset}
+		http_test
+		nikto_func
+
+	fi
+}
+
+# // Nikto Function \\ #
+function nikto_func {
+
+	if [[ $http_status == "open" ]] ; then
+		if [ ! -d $DIRECTORY ]
+		then
+			echo -e ${green}
+		sudo	mkdir "$DIRECTORY" && sudo nikto --host $ip -output "$DIRECTORY/nikto_$ip.txt"
+			echo -e ${reset}
+			gobuster_func
+			
+		else
+			echo -e ${green}
+			sudo nikto --host $ip -output "$DIRECTORY/nikto_$ip.txt"
+			echo -e ${reset}
+			gobuster_func
+		fi
+	else
+		echo -e
+		echo -e "${red}[X] No need to run NIKTO HTTP not running on: $ip ${reset}"
+		gobuster_func
+		
+	fi
+}
+
+
+
+# // Gobuster Function \\ #
+function gobuster_func {
+	echo -e "${green}"
+	if [[ $fs == "-L" ]] || [[ $fs == "-l" ]]; then # Large Gobuster Test
+		echo -e "${cyan}[+] Using Large list${green}"
+		if [[ $http_status == "open" ]]; then
+			if [ ! -d $DIRECTORY ]
+			then
+				sudo mkdir "$DIRECTORY" && sudo gobuster -u http://$ip/ -w /usr/share/wordlists/dirbuster/directory-list-1.0.txt -o "$DIRECTORY/gobuster_$ip.txt" dir
+			else
+				sudo gobuster -u http://$ip/ -w /usr/share/wordlists/dirbuster/directory-list-1.0.txt -o "$DIRECTORY/gobuster_$ip.txt" dir
+			fi
+		else
+			echo -e
+			echo -e "${red}[X] No need to run Gobuster HTTP not running on: $ip${reset}"
+		fi
+	elif [[ $fs == "-M" ]] || [[ $fs == "-m" ]]; then # Medium Gobuster Test
+		echo -e "${cyan}[+] Using Medium list${green}"
+		if [[ $http_status == "open" ]]; then
+			if [ ! -d $DIRECTORY ]
+			then
+				sudo mkdir "$DIRECTORY" && sudo gobuster -u http://$ip/ -w /usr/share/wordlists/dirbuster/directory-list-2.3-medium.txt -o "$DIRECTORY/gobuster_$ip.txt" dir
+			else
+				sudo gobuster -u http://$ip/ -w /usr/share/wordlists/dirbuster/directory-list-2.3-medium.txt -o "$DIRECTORY/gobuster_$ip.txt" dir
+			fi
+		else
+			echo -e
+			echo -e "${red}[X] No need to run Gobuster HTTP not running on: $ip${reset}"
+		fi
+	elif [[ $fs == "-S" ]] || [[ $fs == "-s" ]] || [[ $fs == "" ]]; then # Small Gobuster Test
+		echo -e "${cyan}[+] Using Small list${green}"
+		if [[ $http_status == "open" ]]; then
+			if [ ! -d $DIRECTORY ]
+			then
+				sudo mkdir "$DIRECTORY" && sudo gobuster -u http://$ip/ -w /usr/share/wordlists/dirbuster/directory-list-2.3-small.txt -o "$DIRECTORY/gobuster_$ip.txt" dir
+			else
+				sudo gobuster -u http://$ip/ -w /usr/share/wordlists/dirbuster/directory-list-2.3-small.txt -o "$DIRECTORY/gobuster_$ip.txt" dir
+			fi
+		else
+			echo -e
+			echo -e "${red}[X] No need to run Gobuster HTTP not running on: $ip${reset}"
+		fi
+
+	fi
+	echo -e ${reset}
+}
+
+# // Main Function \\ #
+function main {
+	if [[ $ip == "" ]] || [[ $ip == "-h" ]] || [[ $ip == "--help" ]]
+	then
+		echo -e "			   	   ${red} __________________________________${reset}"
+		echo -e "				   ${red}|${green} Syntax: ./penstart {ip address}  ${red}|${reset}"
+		echo -e "				   ${red}|${cyan}       Must Be Sudo To Run!!      ${red}|${reset}"
+		echo -e "				   ${red}| -h --> Show help screen          |${reset}"
+		echo -e "				   ${red}| --help --> Show help screen      |${reset}"
+		echo -e "				   ${red}|${green} You Can Specify Gobuster         ${red}|${reset}"
+		echo -e "				   ${red}|${green} File Size With:                  ${red}|${reset}"
+		echo -e "				   ${red}|${green}  * -L --> Large                  ${red}|${reset}"
+		echo -e "				   ${red}|${green}  * -M --> Medium                 ${red}|${reset}"
+		echo -e "				   ${red}|${green}  * -S --> Small | Defualt        ${red}|${reset}"
+		echo -e "				   ${red}|__________________________________|${reset}"
+		echo -e
+		echo -e "		${green}[O] OUTPUT FILE:"
+		echo -e "		${green}[+] - NMAP: $DIRECTORY/nmap_[ip].nmap${reset}"
+		echo -e "		${green}[+] - NIKTO: $DIRECTORY/nikto_[ip].txt${reset}"
+		echo -e "		${green}[+] - Gobuster: $DIRECTORY/gobuster_[ip].txt${reset}"
+		echo -e "		${cyan}[+] Thank You For Using Pentesting Essentials${reset}"
+
+	elif valid_ip $ip; then
+		http_test
+		nmap_func
+	elif ! valid_ip $ip; then
+		echo -e "${red}[X] Invalid IP Address Form Please Add the -h or --help argument to see syntax${reset}"
+	else
+		echo -e "${red}[X] Add -h or --help to see syntax of command${reset}"
+	fi
+}
+main
